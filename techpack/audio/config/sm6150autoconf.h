@@ -59,3 +59,6 @@
 #define CONFIG_SND_SOC_WCD937X 1
 #define CONFIG_SND_SOC_WCD937X_SLAVE 1
 #define CONFIG_SND_EVENT 1
+/* Huaqin add for smartPA config build by xuyuqing at 2019/01/28 start*/
+#define CONFIG_SND_SOC_TFA98XX 1
+/* Huaqin add for smartPA config build by xuyuqing at 2019/01/28 end*/

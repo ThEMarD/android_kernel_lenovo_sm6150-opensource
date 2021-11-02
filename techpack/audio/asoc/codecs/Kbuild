@@ -197,6 +197,9 @@ ifeq ($(KERNEL_BUILD), 1)
 	obj-y	+= msm_sdw/
 	obj-y	+= wcd9360/
 	obj-y	+= wcd937x/
+# Huaqin add for smartPA config build by xuyuqing at 2019/01/28 start
+	obj-y	+= tfa98xx/
+# Huaqin add for smartPA config build by xuyuqing at 2019/01/28 end
 endif
 
 ifeq ($(CONFIG_SND_SOC_GCOV), y)

@@ -723,7 +723,50 @@ static int lpi_pinctrl_runtime_suspend(struct device *dev)
 	return 0;
 }
 
+/* Huaqin modify for JD2020-802 to solve current consumption problem by xuyuqing at 2019/04/23 start */
+int lpi_pinctrl_suspend(struct device *dev)
+{
+	int ret = -EBUSY;
+
+	dev_dbg(dev, "%s: system suspend\n", __func__);
+
+	if ((!pm_runtime_enabled(dev) || !pm_runtime_suspended(dev))) {
+		ret = lpi_pinctrl_runtime_suspend(dev);
+		if (!ret) {
+			/*
+			 * Synchronize runtime-pm and system-pm states:
+			 * At this point, we are already suspended. If
+			 * runtime-pm still thinks its active, then
+			 * make sure its status is in sync with HW
+			 * status. The three below calls let the
+			 * runtime-pm know that we are suspended
+			 * already without re-invoking the suspend
+			 * callback
+			 */
+			pm_runtime_disable(dev);
+			pm_runtime_set_suspended(dev);
+			pm_runtime_enable(dev);
+		}
+	}
+
+	if (ret == -EBUSY)
+		ret = 0;
+	return ret;
+}
+
+int lpi_pinctrl_resume(struct device *dev)
+{
+	return 0;
+}
+/* Huaqin modify for JD2020-802 to solve current consumption problem by xuyuqing at 2019/04/23 end */
+
 static const struct dev_pm_ops lpi_pinctrl_dev_pm_ops = {
+/* Huaqin modify for JD2020-802 to solve current consumption problem by xuyuqing at 2019/04/23 start */
+	SET_SYSTEM_SLEEP_PM_OPS(
+		lpi_pinctrl_suspend,
+		lpi_pinctrl_resume
+/* Huaqin modify for JD2020-802 to solve current consumption problem by xuyuqing at 2019/04/23 end */
+	)
 	SET_RUNTIME_PM_OPS(
 		lpi_pinctrl_runtime_suspend,
 		lpi_pinctrl_runtime_resume,
