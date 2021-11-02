@@ -309,6 +309,20 @@ source "kernel/Kconfig.freezer"
 
 source "arch/arm64/Kconfig.platforms"
 
+choice
+    bool "Product selection"
+    default PRODUCT_JD20
+    help
+      select build product
+
+config PRODUCT_JD20
+    bool "heart"
+    help
+      This enables support for jd20 product. If you don't
+      know what to do here, say N
+
+endchoice
+
 menu "Bus support"
 
 config PCI

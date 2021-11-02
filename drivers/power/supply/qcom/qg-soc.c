@@ -50,6 +50,9 @@ int qg_adjust_sys_soc(struct qpnp_qg *chip)
 {
 	int soc, vbat_uv, rc;
 	int vcutoff_uv = chip->dt.vbatt_cutoff_mv * 1000;
+//Huaqin modified for JD2020-579 by tangqingyong at 2019-03-13 start
+	int current_now = 0;
+//Huaqin modified for JD2020-579 by tangqingyong at 2019-03-13 end
 
 	chip->sys_soc = CAP(QG_MIN_SOC, QG_MAX_SOC, chip->sys_soc);
 
@@ -67,7 +70,15 @@ int qg_adjust_sys_soc(struct qpnp_qg *chip)
 		if (chip->last_adj_ssoc == FULL_SOC)
 			soc = FULL_SOC;
 		else /* Hold SOC at 99% until we hit 100% */
-			soc = FULL_SOC - 1;
+//Huaqin modified for JD2020-579 by tangqingyong at 2019-03-13 start
+			{
+				soc = FULL_SOC - 1;
+				qg_get_battery_current(chip, &current_now);
+				if ((chip->last_adj_ssoc == 99) && (current_now >( chip->dt.iterm_ma *(-1000)))&& (current_now < 0) )
+					soc = FULL_SOC;
+				qg_dbg(chip, QG_DEBUG_SOC,"[HQ] current_now = %d chip->dt.iterm_ma = %d \n",current_now,chip->dt.iterm_ma);
+			}
+//Huaqin modified for JD2020-579 by tangqingyong at 2019-03-13 end
 	} else {
 		soc = DIV_ROUND_CLOSEST(chip->sys_soc, 100);
 	}

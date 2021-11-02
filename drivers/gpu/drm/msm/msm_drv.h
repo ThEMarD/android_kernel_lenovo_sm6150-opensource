@@ -48,6 +48,10 @@
 
 #include "sde_power_handle.h"
 
+#ifdef CONFIG_PRODUCT_JD20
+#define CONFIG_LCM_BACKLIGHT_HBM_MODE
+#endif
+
 #define GET_MAJOR_REV(rev)		((rev) >> 28)
 #define GET_MINOR_REV(rev)		(((rev) >> 16) & 0xFFF)
 #define GET_STEP_REV(rev)		((rev) & 0xFFFF)

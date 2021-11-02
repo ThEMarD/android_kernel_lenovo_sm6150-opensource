@@ -194,6 +194,10 @@ struct dsi_panel {
 	bool ulps_feature_enabled;
 	bool ulps_suspend_enabled;
 	bool allow_phy_power_off;
+#ifdef CONFIG_LCM_BACKLIGHT_HBM_MODE
+	bool hbm_cmd_mode;
+	bool hbm_status;
+#endif
 	atomic_t esd_recovery_pending;
 
 	bool panel_initialized;
@@ -294,6 +298,11 @@ int dsi_panel_send_qsync_off_dcs(struct dsi_panel *panel,
 
 int dsi_panel_send_roi_dcs(struct dsi_panel *panel, int ctrl_idx,
 		struct dsi_rect *roi);
+
+#ifdef CONFIG_LCM_BACKLIGHT_HBM_MODE
+int dsi_panel_hbm_setup(struct dsi_panel *panel, bool status);
+int dsi_panel_turn_on_dimming(struct dsi_panel *panel);
+#endif
 
 int dsi_panel_switch(struct dsi_panel *panel);
 

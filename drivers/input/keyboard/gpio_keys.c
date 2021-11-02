@@ -363,6 +363,9 @@ static void gpio_keys_gpio_report_event(struct gpio_button_data *bdata)
 	struct input_dev *input = bdata->input;
 	unsigned int type = button->type ?: EV_KEY;
 	int state;
+        struct timeval timestamp;
+        struct tm tm;
+        char buff[255];
 
 	state = gpiod_get_value_cansleep(bdata->gpiod);
 	if (state < 0) {
@@ -378,6 +381,14 @@ static void gpio_keys_gpio_report_event(struct gpio_button_data *bdata)
 		input_event(input, type, *bdata->code, state);
 	}
 	input_sync(input);
+
+        do_gettimeofday(&timestamp);
+        time_to_tm((time_t)(timestamp.tv_sec), 0, &tm);
+        snprintf(buff, sizeof(buff),
+                 "%u-%02d-%02d %02d:%02d:%02d UTC",
+                 (int) tm.tm_year + 1900, tm.tm_mon + 1,
+                 tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec);
+	printk("Report volume up key %s event %d at: %s\n", state ? "press" : "release", *bdata->code, buff);
 }
 
 static void gpio_keys_gpio_work_func(struct work_struct *work)

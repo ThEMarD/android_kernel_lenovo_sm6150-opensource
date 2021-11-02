@@ -14,7 +14,7 @@
 #include "sm6150-lpi.dtsi"
 #include <dt-bindings/clock/qcom,audio-ext-clk.h>
 #include <dt-bindings/sound/audio-codec-port-types.h>
-
+#include <generated/autoconf.h>
 &bolero {
 	qcom,num-macros = <4>;
 	qcom,va-without-decimation;
@@ -191,12 +191,26 @@
 };
 
 &sm6150_snd {
+#ifdef CONFIG_PRODUCT_JD20
+	/* Huaqin add for name of sound card by xuyuqing at 2019/01/26 start */
+	qcom,model = "sm6150-wcd9375qrd-snd-card";
+	/* Huaqin add for name of sound card by xuyuqing at 2019/01/26 end */
+#else
 	qcom,model = "sm6150-idp-snd-card";
+#endif
 	qcom,msm-mi2s-master = <1>, <1>, <1>, <1>, <1>;
 	qcom,ext-disp-audio-rx = <1>;
 	qcom,audio-routing =
+		/* Huaqin add for amic1 BIAS1 in dtsi by xuyuqing at 2019/01/26 start */
+		"AMIC1", "MIC BIAS1",
+		"MIC BIAS1", "Analog Mic1",
+		/* Huaqin add for amic1 BIAS1 in dtsi by xuyuqing at 2019/01/26 end */
 		"AMIC2", "MIC BIAS2",
 		"MIC BIAS2", "Analog Mic2",
+		/* Huaqin add for amic3 BIAS3 by xuyuqing at 2019/01/26 start */
+		"AMIC3", "MIC BIAS3",
+		"MIC BIAS3", "Analog Mic3",
+		/* Huaqin add for amic3 BIAS3 by xuyuqing at 2019/01/26 end */
 		"TX DMIC0", "MIC BIAS1",
 		"MIC BIAS1", "Digital Mic0",
 		"TX DMIC1", "MIC BIAS1",
@@ -232,14 +246,25 @@
 		"WSA_SPK2 OUT", "VA_MCLK";
 	qcom,msm-mbhc-hphl-swh = <1>;
 	qcom,msm-mbhc-gnd-swh = <1>;
+#ifdef CONFIG_PRODUCT_JD20
+	/* Huaqin add for bring up smartPA config mi2s by xuyuqing at 2019/01/28 start */
+	qcom,sec-mi2s-gpios = <&sec_mi2s_gpios>;
+	/* Huaqin add for bring up smartPA config mi2s by xuyuqing at 2019/01/28 end */
+#endif
 	qcom,cdc-dmic01-gpios = <&cdc_dmic01_gpios>;
 	qcom,cdc-dmic23-gpios = <&cdc_dmic23_gpios>;
 	asoc-codec  = <&stub_codec>, <&bolero>, <&ext_disp_audio_codec>;
 	asoc-codec-names = "msm-stub-codec.1", "bolero_codec",
 			   "msm-ext-disp-audio-codec-rx";
+#ifdef CONFIG_PRODUCT_JD20
+	/* Huaqin add for disable wsa-devs by xuyuqing at 2019/01/26 start */
+	qcom,wsa-max-devs = <0>;
+	/* Huaqin add for disable wsa-devs by xuyuqing at 2019/01/26 end */
+#else
 	qcom,wsa-max-devs = <2>;
 	qcom,wsa-devs = <&wsa881x_0211>, <&wsa881x_0212>,
 			<&wsa881x_0213>, <&wsa881x_0214>;
+#endif
 	qcom,wsa-aux-dev-prefix = "SpkrLeft", "SpkrRight",
 				  "SpkrLeft", "SpkrRight";
 	qcom,codec-max-aux-devs = <1>;
@@ -303,7 +328,19 @@
 		pinctrl-0 = <&spkr_2_sd_n_active>;
 		pinctrl-1 = <&spkr_2_sd_n_sleep>;
 	};
-
+#ifdef CONFIG_PRODUCT_JD20
+	/* Huaqin add for bring up smartPA config mi2s by xuyuqing at 2019/01/28 start */
+	sec_mi2s_gpios: sec_mi2s_pinctrl {
+		compatible = "qcom,msm-cdc-pinctrl";
+		pinctrl-names = "aud_active", "aud_sleep";
+			pinctrl-0 = <&sec_mi2s_active
+		&sec_mi2s_data0_active	&sec_mi2s_data1_active>;
+		pinctrl-1 = <&sec_mi2s_sleep
+			&sec_mi2s_data0_sleep &sec_mi2s_data1_sleep>;
+		qcom,lpi-gpios;
+	};
+	/* Huaqin add for bring up smartPA config mi2s by xuyuqing at 2019/01/28 end */
+#endif
 	wcd9xxx_intc: wcd9xxx-irq {
 		status = "disabled";
 		compatible = "qcom,wcd9xxx-irq";

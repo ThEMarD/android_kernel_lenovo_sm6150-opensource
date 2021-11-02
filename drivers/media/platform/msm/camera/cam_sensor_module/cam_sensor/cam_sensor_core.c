@@ -19,6 +19,9 @@
 #include "cam_common_util.h"
 #include "cam_packet_util.h"
 
+/* Huaqin add for JD2020-255 by likai at 2019/1/30 start*/
+extern char *cameraModuleInfo[4];
+/* Huaqin add for JD2020-255 by likai at 2019/1/30 end*/
 
 static void cam_sensor_update_req_mgr(
 	struct cam_sensor_ctrl_t *s_ctrl,
@@ -619,7 +622,9 @@ int cam_sensor_match_id(struct cam_sensor_ctrl_t *s_ctrl)
 	int rc = 0;
 	uint32_t chipid = 0;
 	struct cam_camera_slave_info *slave_info;
-
+	/* Huaqin add for JD2020-255 by likai at 2019/1/30 start*/
+	char *sensor_name = "default";
+	/* Huaqin add for JD2020-255 by likai at 2019/1/30 end*/
 	slave_info = &(s_ctrl->sensordata->slave_info);
 
 	if (!slave_info) {
@@ -641,6 +646,29 @@ int cam_sensor_match_id(struct cam_sensor_ctrl_t *s_ctrl)
 				chipid, slave_info->sensor_id);
 		return -ENODEV;
 	}
+	/* Huaqin add for JD2020-255 by likai at 2019/1/30 start*/
+		switch(slave_info->sensor_id){
+		case REAR_SENSOR_ID:
+			sensor_name="ofilm_im576";
+            cameraModuleInfo[0]=sensor_name;
+			break;
+		case REAR_AUX1_SENSOR_ID:
+			sensor_name="ofilm_ov8856";
+            cameraModuleInfo[2]=sensor_name;
+			break;
+		case REAR_AUX2_SENSOR_ID:
+			sensor_name="ofilm_s5k5e9";
+            cameraModuleInfo[1]=sensor_name;
+			break;
+		case FRONT_SENSOR_ID:
+			sensor_name="ofilm_s5k3p9";
+            cameraModuleInfo[3]=sensor_name;
+			break;
+		default:
+			sensor_name="NULL";
+	}
+
+	/* Huaqin add for JD2020-255 by likai at 2019/1/30 end*/
 	return rc;
 }
 

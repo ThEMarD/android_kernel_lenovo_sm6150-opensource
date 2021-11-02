@@ -10,6 +10,7 @@
  * GNU General Public License for more details.
  */
 
+#define DEBUG
 #define pr_fmt(fmt)	"QG-K: %s: " fmt, __func__
 
 #include <linux/alarmtimer.h>
@@ -40,6 +41,11 @@
 #include "qg-soc.h"
 #include "qg-battery-profile.h"
 #include "qg-defs.h"
+
+#define LENOVO_LOG_OPT
+#ifdef LENOVO_LOG_OPT
+int64_t old_learned_cap_uah = 0;
+#endif
 
 static int qg_debug_mask;
 module_param_named(
@@ -1396,8 +1402,16 @@ static int qg_get_learned_capacity(void *data, int64_t *learned_cap_uah)
 	}
 	*learned_cap_uah = cc_mah * 1000;
 
+#ifdef LENOVO_LOG_OPT
+	if ((old_learned_cap_uah == 0) || (old_learned_cap_uah != *learned_cap_uah)) {
+		qg_dbg(chip, QG_DEBUG_ALG_CL, "Retrieved learned capacity %llduah\n",
+						*learned_cap_uah);
+		old_learned_cap_uah == *learned_cap_uah;
+	}
+#else
 	qg_dbg(chip, QG_DEBUG_ALG_CL, "Retrieved learned capacity %llduah\n",
 					*learned_cap_uah);
+#endif
 	return 0;
 }
 
@@ -3897,6 +3911,7 @@ static int qpnp_qg_probe(struct platform_device *pdev)
 	}
 
 	chip->dev = &pdev->dev;
+	qg_debug_mask = 0xCEF;
 	chip->debug_mask = &qg_debug_mask;
 	platform_set_drvdata(pdev, chip);
 	INIT_WORK(&chip->udata_work, process_udata_work);

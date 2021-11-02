@@ -44,14 +44,18 @@
 #define DSI_CLOCK_BITRATE_RADIX 10
 #define MAX_TE_SOURCE_ID  2
 
+static char dsi_display_primary[MAX_CMDLINE_PARAM_LEN];
+
 DEFINE_MUTEX(dsi_display_clk_mutex);
 
-static char dsi_display_primary[MAX_CMDLINE_PARAM_LEN];
 static char dsi_display_secondary[MAX_CMDLINE_PARAM_LEN];
 static struct dsi_display_boot_param boot_displays[MAX_DSI_ACTIVE_DISPLAY] = {
 	{.boot_param = dsi_display_primary},
 	{.boot_param = dsi_display_secondary},
 };
+#ifdef CONFIG_LCM_BACKLIGHT_HBM_MODE
+u32 pre_brt;
+#endif
 
 static const struct of_device_id dsi_display_dt_match[] = {
 	{.compatible = "qcom,dsi-display"},
@@ -199,6 +203,15 @@ int dsi_display_set_backlight(struct drm_connector *connector,
 	}
 
 	panel->bl_config.bl_level = bl_lvl;
+
+#ifdef CONFIG_LCM_BACKLIGHT_HBM_MODE
+        if (bl_lvl)
+                pre_brt = bl_lvl;
+
+        if (panel->hbm_status) {
+                goto error;
+	}
+#endif
 
 	/* scale backlight */
 	bl_scale = panel->bl_config.bl_scale;
@@ -573,6 +586,12 @@ static bool dsi_display_validate_reg_read(struct dsi_panel *panel)
 
 	for (i = 0; i < len; i++)
 		j += len;
+
+	//add for JD20 tianma panel AOD feature begin
+	if (config->return_buf[0] == 0x9c &&
+			config->status_value[0] == 0xdc)
+		config->status_value[0] = 0x9c;
+	//add for JD20 tianma panel AOD feature end
 
 	for (j = 0; j < config->groups; ++j) {
 		for (i = 0; i < len; ++i) {
@@ -1062,12 +1081,26 @@ int dsi_display_set_power(struct drm_connector *connector,
 
 	switch (power_mode) {
 	case SDE_MODE_DPMS_LP1:
+		//add for JD20 tianma panel AOD feature begin
+		if (!strcmp(display->name, "dsi_nt37770f_tm_amoled_cmd_display")) {
+			pr_info("set TM AOD mode in!\n");
+			display->panel->esd_config.status_value[0] = 0xdc;
+		}
+		//add for JD20 tianma panel AOD feature begin
+
 		rc = dsi_panel_set_lp1(display->panel);
 		break;
 	case SDE_MODE_DPMS_LP2:
 		rc = dsi_panel_set_lp2(display->panel);
 		break;
 	default:
+		//add for JD20 tianma panel AOD feature begin
+		if (!strcmp(display->name, "dsi_nt37770f_tm_amoled_cmd_display")) {
+			pr_info("set TM AOD mode out!\n");
+			display->panel->esd_config.status_value[0] = 0x9c;
+		}
+		//add for JD20 tianma panel AOD feature end
+
 		rc = dsi_panel_set_nolp(display->panel);
 		break;
 	}
@@ -7032,6 +7065,120 @@ exit:
 	mutex_unlock(&display->display_lock);
 	return rc;
 }
+
+#ifdef CONFIG_LCM_BACKLIGHT_HBM_MODE
+static int dsi_display_hbm_on(struct dsi_display *display)
+{
+	int rc = 0;
+	struct dsi_panel *panel = display->panel;
+	//u32 temp_pre_brt;
+
+        //temp_pre_brt = panel->bl_config.bl_level;
+        //if (!temp_pre_brt) {
+        //        pr_err("wangweiran fail to set pre_brightness!\n");
+        //        return -ENODATA;
+        //}
+
+	//pre_brt = temp_pre_brt;
+
+	rc = dsi_panel_hbm_setup(panel, true);
+	if (rc)
+		pr_err("wangweiran failed to tx cmd!\n");
+
+
+	return rc;
+}
+
+static int dsi_display_hbm_off(struct dsi_display *display)
+{
+	int rc = 0;
+	struct dsi_panel* panel = display->panel;
+
+	rc = dsi_panel_hbm_setup(panel, false);
+	if (rc) {
+		pr_err("wangweiran failed to disable hbm by tx cmd!\n");
+		return rc;
+	}
+
+//	if (panel->hbm_cmd_mode) {
+//		pr_info("Enter sumsang hbm!\n");
+//		return rc;
+//	}
+
+	rc = dsi_panel_set_backlight(panel, pre_brt);
+	if (rc)
+		pr_err("failed to turn off tm hbm\n", rc);
+
+	if (!panel->hbm_cmd_mode) {
+		msleep(20);
+		dsi_panel_turn_on_dimming(panel);
+	}
+
+	return rc;
+}
+
+int dsi_display_hbm_setup(struct dsi_display *display, bool enable)
+{
+	int rc = 0;
+	struct dsi_panel *panel = display->panel;
+
+	if (display == NULL || panel == NULL) {
+		pr_err("%s: wangweiran display or panel is NULL\n", __func__);
+		return -EINVAL;
+	}
+
+mutex_lock(&panel->panel_lock);
+
+	if (!dsi_panel_initialized(panel)) {
+		pr_err("wangweiran panel is not initialized yet!\n");
+		goto exit;
+        }
+
+        rc = dsi_display_clk_ctrl(display->dsi_clk_handle,
+                        DSI_CORE_CLK, DSI_CLK_ON);
+        if (rc) {
+                pr_err("[%s] failed to enable DSI core clocks, rc=%d\n",
+                       display->name, rc);
+                goto exit;
+        }
+
+	if (enable) {
+		if (panel->hbm_status)
+			goto exit2;
+
+		rc = dsi_display_hbm_on(display);
+		if (rc) {
+			pr_err("wangweiran dsi_display_hbm_on failed!\n");
+			goto exit2;
+		}
+
+		panel->hbm_status = true;
+	} else {
+		if (!display->panel->hbm_status)
+			goto exit2;
+
+		rc = dsi_display_hbm_off(display);
+		if (rc) {
+			pr_err("dsi_display_hbm_off failed!\n");
+			goto exit2;
+		}
+
+		panel->hbm_status = false;
+	}
+exit2:
+       rc = dsi_display_clk_ctrl(display->dsi_clk_handle,
+                        DSI_CORE_CLK, DSI_CLK_OFF);
+        if (rc) {
+                pr_err("[%s] failed to disable DSI core clocks, rc=%d\n",
+                       display->name, rc);
+                goto exit;
+        }
+
+exit:
+	mutex_unlock(&panel->panel_lock);
+	return rc;
+}
+#endif
 
 static int dsi_display_set_roi(struct dsi_display *display,
 		struct msm_roi_list *rois)

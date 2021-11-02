@@ -91,6 +91,7 @@ static int sde_backlight_device_update_status(struct backlight_device *bd)
 	bl_lvl = mult_frac(brightness, display->panel->bl_config.bl_max_level,
 			display->panel->bl_config.brightness_max_level);
 
+
 	if (!bl_lvl && brightness)
 		bl_lvl = 1;
 
@@ -123,6 +124,74 @@ static const struct backlight_ops sde_backlight_device_ops = {
 	.get_brightness = sde_backlight_device_get_brightness,
 };
 
+#ifdef CONFIG_LCM_BACKLIGHT_HBM_MODE
+int dsi_panel_on_hbm = 0;
+
+enum {
+        HBM_FP_DIS              = 0,
+        HBM_FP_EN               = 1,
+        HBM_SUNNY_DIS           = 14,
+        HBM_SUNNY_EN            = 15,
+        HBM_FP_AUTO_EN  = 255
+};
+
+static int oem_backlight_device_set_hbm(struct backlight_device *bd)
+{
+	int enable = 0, brightness = 0;
+	struct dsi_display *display;
+	struct sde_connector *c_conn;
+
+        brightness = bd->props.brightness;
+
+	pr_info("request hbm for next panel on gongdb brightness %d\n", brightness);
+
+	switch(brightness) {
+        case HBM_FP_EN:
+                dsi_panel_on_hbm = 1;
+                enable = 1;
+                SDE_DEBUG("enable and request hbm for next panel on\n");
+                break;
+        case HBM_FP_AUTO_EN:
+                SDE_DEBUG("only request hbm for next panel on\n");
+                dsi_panel_on_hbm = 1;
+                return 0;
+        case HBM_FP_DIS:
+                dsi_panel_on_hbm = 0;
+                enable = 0;
+                break;
+        case HBM_SUNNY_EN:
+                enable = 1;
+                break;
+        case HBM_SUNNY_DIS:
+                enable = 0;
+                break;
+        default:
+                pr_info("wrong setting for hbm: %d\n", brightness);
+                return 0;
+        }
+
+	c_conn = bl_get_data(bd);
+	display = (struct dsi_display *) c_conn->display;
+
+	if (dsi_display_hbm_setup(display, enable)) {
+		pr_err("%s: wangweiran set hbm failed\n", __func__);
+		return -EFAULT;
+	}
+
+	return 0;
+}
+
+static int oem_backlight_device_get_hbm_status(struct backlight_device *bd)
+{
+	return 0;
+}
+
+static const struct backlight_ops hbm_backlight_device_ops = {
+	.update_status = oem_backlight_device_set_hbm,
+	.get_brightness = oem_backlight_device_get_hbm_status,
+};
+#endif
+
 static int sde_backlight_setup(struct sde_connector *c_conn,
 					struct drm_device *dev)
 {
@@ -131,6 +200,10 @@ static int sde_backlight_setup(struct sde_connector *c_conn,
 	struct dsi_backlight_config *bl_config;
 	static int display_count;
 	char bl_node_name[BL_NODE_NAME_SIZE];
+#ifdef CONFIG_LCM_BACKLIGHT_HBM_MODE
+	struct backlight_properties hbm_props;
+	char hbm_node_name[BL_NODE_NAME_SIZE];
+#endif
 
 	if (!c_conn || !dev || !dev->dev) {
 		SDE_ERROR("invalid param\n");
@@ -142,6 +215,10 @@ static int sde_backlight_setup(struct sde_connector *c_conn,
 	memset(&props, 0, sizeof(props));
 	props.type = BACKLIGHT_RAW;
 	props.power = FB_BLANK_UNBLANK;
+#ifdef CONFIG_LCM_BACKLIGHT_HBM_MODE
+	hbm_props.brightness = 0;
+	hbm_props.max_brightness = 255;
+#endif
 
 	display = (struct dsi_display *) c_conn->display;
 	bl_config = &display->panel->bl_config;
@@ -157,6 +234,19 @@ static int sde_backlight_setup(struct sde_connector *c_conn,
 		c_conn->bl_device = NULL;
 		return -ENODEV;
 	}
+#ifdef CONFIG_LCM_BACKLIGHT_HBM_MODE
+	snprintf(hbm_node_name, BL_NODE_NAME_SIZE, "panel%u-hbm",
+							display_count);
+	c_conn->hbm_device = backlight_device_register(hbm_node_name, dev->dev,
+			c_conn, &hbm_backlight_device_ops, &hbm_props);
+	if (IS_ERR_OR_NULL(c_conn->hbm_device)) {
+		SDE_ERROR("wangweiran failed to register hbm device: %ld\n",
+				    PTR_ERR(c_conn->bl_device));
+		c_conn->hbm_device = NULL;
+		return -ENODEV;
+	}
+#endif
+
 	display_count++;
 
 	return 0;

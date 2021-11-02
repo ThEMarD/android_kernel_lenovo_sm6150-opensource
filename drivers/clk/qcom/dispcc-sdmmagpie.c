@@ -212,6 +212,9 @@ static struct clk_rcg2 disp_cc_mdss_ahb_clk_src = {
 };
 
 static const struct freq_tbl ftbl_disp_cc_mdss_byte0_clk_src[] = {
+#ifdef CONFIG_PRODUCT_JD20
+	F(12800000, P_BI_TCXO, 1.5, 0, 0),
+#endif
 	F(19200000, P_BI_TCXO, 1, 0, 0),
 	{ }
 };
@@ -411,6 +414,9 @@ static struct clk_rcg2 disp_cc_mdss_esc1_clk_src = {
 };
 
 static const struct freq_tbl ftbl_disp_cc_mdss_mdp_clk_src[] = {
+#ifdef CONFIG_PRODUCT_JD20
+	F(12800000, P_BI_TCXO, 1.5, 0, 0),
+#endif
 	F(19200000, P_BI_TCXO, 1, 0, 0),
 	F(85714286, P_GPLL0_OUT_MAIN, 7, 0, 0),
 	F(100000000, P_GPLL0_OUT_MAIN, 6, 0, 0),

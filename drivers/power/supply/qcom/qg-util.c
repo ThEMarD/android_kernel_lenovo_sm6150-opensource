@@ -352,6 +352,27 @@ int qg_write_monotonic_soc(struct qpnp_qg *chip, int msoc)
 	return rc;
 }
 
+/* Huaqin modify for HuaQinQualcom/OHQC-2222 Compensate battery temperature by gaochao at 2019/03/26 start */
+#define QG_BATTERY_HOT_ADC_TEMPERATURE					560
+#define QG_BATTERY_COMPENSATION_HOT_TEMPERATURE		25
+void qg_compensate_battery_temperature(int *temp)
+{
+	if (temp)
+	{
+		pr_debug("before compensate batt_temp=%d\n", *temp);
+		if (*temp > QG_BATTERY_HOT_ADC_TEMPERATURE)
+		{
+			*temp = *temp + QG_BATTERY_COMPENSATION_HOT_TEMPERATURE;
+			pr_debug("after compensate batt_temp=%d\n", *temp);
+		}
+	}
+	else
+	{
+		pr_debug("temp is NULL\n");
+	}
+}
+/* Huaqin modify for HuaQinQualcom/OHQC-2222 Compensate battery temperature by gaochao at 2019/03/26 end */
+
 int qg_get_battery_temp(struct qpnp_qg *chip, int *temp)
 {
 	int rc = 0;
@@ -366,6 +387,10 @@ int qg_get_battery_temp(struct qpnp_qg *chip, int *temp)
 		pr_err("Failed reading BAT_TEMP over ADC rc=%d\n", rc);
 		return rc;
 	}
+
+	/* Huaqin modify for HuaQinQualcom/OHQC-2222 Compensate battery temperature by gaochao at 2019/03/25 start */
+	qg_compensate_battery_temperature(temp);
+	/* Huaqin modify for HuaQinQualcom/OHQC-2222 Compensate battery temperature by gaochao at 2019/03/25 end */
 	pr_debug("batt_temp = %d\n", *temp);
 
 	return 0;

@@ -2037,26 +2037,29 @@
 				cooling-device = <&msm_gpu THERMAL_NO_LIMIT
 						(THERMAL_MAX_LIMIT-4)>;
 			};
-			modem_lvl1 {
-				trip = <&modem_trip1>;
-				cooling-device = <&modem_pa 1 1>;
-			};
-			modem_lvl2 {
-				trip = <&modem_trip2>;
-				cooling-device = <&modem_pa 2 2>;
-			};
-			modem_lvl3 {
-				trip = <&modem_trip3_batt_trip1>;
-				cooling-device = <&modem_pa 3 3>;
-			};
-			modem_proc_lvl1 {
-				trip = <&modem_trip0>;
-				cooling-device = <&modem_proc 1 1>;
-			};
-			modem_proc_lvl3 {
-				trip = <&modem_trip3_batt_trip1>;
-				cooling-device = <&modem_proc 3 3>;
-			};
+			/* Huaqin modify for JD2020-377&366 by wangyu at 2019/02/22 start */
+			/*thernal caused the modem enters into Emergency Mode,remove the thermal rule about modem*/
+			//modem_lvl1 {
+				//trip = <&modem_trip1>;
+				//cooling-device = <&modem_pa 1 1>;
+			//};
+			//modem_lvl2 {
+				//trip = <&modem_trip2>;
+				//cooling-device = <&modem_pa 2 2>;
+			//};
+			//modem_lvl3 {
+				//trip = <&modem_trip3_batt_trip1>;
+				//cooling-device = <&modem_pa 3 3>;
+			//};
+			//modem_proc_lvl1 {
+				//trip = <&modem_trip0>;
+				//cooling-device = <&modem_proc 1 1>;
+			//};
+			//modem_proc_lvl3 {
+				//trip = <&modem_trip3_batt_trip1>;
+				//cooling-device = <&modem_proc 3 3>;
+			//};
+			/* Huaqin modify for JD2020-377&366 by wangyu at 2019/02/22 end */
 			battery_lvl0 {
 				trip = <&batt_trip0>;
 				cooling-device = <&pm6150_charger 1 1>;

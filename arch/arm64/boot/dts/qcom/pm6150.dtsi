@@ -33,8 +33,12 @@
 			compatible = "qcom,qpnp-power-on";
 			reg = <0x800 0x100>;
 			interrupts = <0x0 0x8 0x0 IRQ_TYPE_NONE>,
-				     <0x0 0x8 0x1 IRQ_TYPE_NONE>;
-			interrupt-names = "kpdpwr", "resin";
+				     <0x0 0x8 0x1 IRQ_TYPE_NONE>,
+				     <0x0 0x8 0x3 IRQ_TYPE_NONE>,
+				     <0x0 0x8 0x4 IRQ_TYPE_NONE>,
+				     <0x0 0x8 0x5 IRQ_TYPE_NONE>;
+			interrupt-names = "kpdpwr", "resin",
+			        "kpdpwr-bark", "resin-bark", "kpdpwr-resin-bark";
 			qcom,pon-dbc-delay = <15625>;
 			qcom,kpdpwr-sw-debounce;
 			qcom,system-reset;
@@ -42,14 +46,29 @@
 
 			qcom,pon_1 {
 				qcom,pon-type = <PON_POWER_ON_TYPE_KPDPWR>;
+				qcom,support-reset = <1>;
+				qcom,s1-timer = <10256>;
+				qcom,s2-timer = <2000>;
+				qcom,s2-type = <8>;
 				qcom,pull-up;
 				linux,code = <KEY_POWER>;
+				qcom,use-bark;
 			};
 
 			qcom,pon_2 {
 				qcom,pon-type = <PON_POWER_ON_TYPE_RESIN>;
 				qcom,pull-up;
 				linux,code = <KEY_VOLUMEDOWN>;
+			};
+
+			qcom,pon_3 {
+				qcom,pon-type = <PON_POWER_ON_TYPE_KPDPWR_RESIN>;
+				qcom,support-reset = <1>;
+				qcom,s1-timer = <6720>;
+				qcom,s2-timer = <2000>;
+				qcom,s2-type = <1>;
+				qcom,pull-up;
+				qcom,use-bark;
 			};
 		};
 
@@ -206,6 +225,9 @@
 			#size-cells = <1>;
 			#cooling-cells = <2>;
 
+                        /* Huaqin modify for JD2020-163 Config float charge to 500ma by yangxinlu at 2019/02/01 start */
+                        qcom,float-option = <2>;
+                        /* Huaqin modify for JD2020-163 Config float charge to 500ma by yangxinlu at 2019/02/01 end */
 			qcom,pmic-revid = <&pm6150_revid>;
 
 			qcom,chgr@1000 {
@@ -400,13 +422,18 @@
 			compatible = "qcom,qpnp-qg";
 			#address-cells = <1>;
 			#size-cells = <1>;
-
-			qcom,vbatt-cutoff-mv = <3200>;
-			qcom,vbatt-low-mv = <3300>;
-			qcom,vbatt-low-cold-mv = <3700>;
+//huaqin add for jd2020-317 system cutoff voltage at 20190131 start
+			qcom,vbatt-cutoff-mv = <3400>;
+			qcom,vbatt-low-mv = <3500>;
+			qcom,vbatt-low-cold-mv = <3800>;
 			qcom,vbatt-empty-mv = <3000>;
-			qcom,vbatt-empty-cold-mv = <3000>;
+			qcom,vbatt-empty-cold-mv = <2800>;
+//huaqin add for jd2020-317 system cutoff voltage at 20190131 end
 			qcom,s3-entry-fifo-length = <2>;
+			/* Huaqin modify for JD2020-466 Optimize QG sleep and wakeup threshold to reduce system power consumption by gaochao at 2019/03/07 start */
+			qcom,s3-entry-ibat-ua = <18000>;
+			qcom,s3-exit-ibat-ua = <38000>;
+			/* Huaqin modify for JD2020-466 Optimize QG sleep and wakeup threshold to reduce system power consumption by gaochao at 2019/03/07 end */
 
 			qcom,pmic-revid = <&pm6150_revid>;
 			io-channels = <&pm6150_vadc ADC_BAT_THERM_PU2>,
@@ -647,7 +674,7 @@
 
 		trips {
 			soc_trip:soc-trip {
-				temperature = <10>;
+				temperature = <0>;
 				hysteresis = <0>;
 				type = "passive";
 			};

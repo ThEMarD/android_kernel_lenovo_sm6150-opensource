@@ -415,6 +415,9 @@ struct sde_connector {
 	spinlock_t event_lock;
 
 	struct backlight_device *bl_device;
+#ifdef CONFIG_LCM_BACKLIGHT_HBM_MODE
+	struct backlight_device *hbm_device;
+#endif
 	struct delayed_work status_work;
 	u32 esd_status_interval;
 	bool panel_dead;

@@ -70,7 +70,7 @@ struct step_chg_info {
 
 	struct votable		*fcc_votable;
 	struct votable		*fv_votable;
-	struct votable		*usb_icl_votable;
+	struct votable		*chg_disable_votable;
 	struct wakeup_source	*step_chg_ws;
 	struct power_supply	*batt_psy;
 	struct power_supply	*bms_psy;
@@ -633,8 +633,8 @@ static int handle_jeita(struct step_chg_info *chip)
 			vote(chip->fcc_votable, JEITA_VOTER, false, 0);
 		if (chip->fv_votable)
 			vote(chip->fv_votable, JEITA_VOTER, false, 0);
-		if (chip->usb_icl_votable)
-			vote(chip->usb_icl_votable, JEITA_VOTER, false, 0);
+		if (chip->chg_disable_votable)
+			vote(chip->chg_disable_votable, JEITA_VOTER, false, 0);
 		return 0;
 	}
 
@@ -686,10 +686,10 @@ static int handle_jeita(struct step_chg_info *chip)
 	if (!chip->fv_votable)
 		goto update_time;
 
-	if (!chip->usb_icl_votable)
-		chip->usb_icl_votable = find_votable("USB_ICL");
+	if (!chip->chg_disable_votable)
+		chip->chg_disable_votable = find_votable("CHG_DISABLE");
 
-	if (!chip->usb_icl_votable)
+	if (!chip->chg_disable_votable)
 		goto set_jeita_fv;
 
 	/*
@@ -699,7 +699,7 @@ static int handle_jeita(struct step_chg_info *chip)
 	rc = power_supply_get_property(chip->batt_psy,
 				POWER_SUPPLY_PROP_VOLTAGE_MAX, &pval);
 	if (rc || (pval.intval == fv_uv)) {
-		vote(chip->usb_icl_votable, JEITA_VOTER, false, 0);
+		vote(chip->chg_disable_votable, JEITA_VOTER, false, 0);
 		goto set_jeita_fv;
 	}
 
@@ -711,9 +711,9 @@ static int handle_jeita(struct step_chg_info *chip)
 		rc = power_supply_get_property(chip->batt_psy,
 				POWER_SUPPLY_PROP_VOLTAGE_NOW, &pval);
 		if (!rc && (pval.intval > fv_uv))
-			vote(chip->usb_icl_votable, JEITA_VOTER, true, 0);
+			vote(chip->chg_disable_votable, JEITA_VOTER, true, 1);
 		else if (pval.intval < (fv_uv - JEITA_SUSPEND_HYST_UV))
-			vote(chip->usb_icl_votable, JEITA_VOTER, false, 0);
+			vote(chip->chg_disable_votable, JEITA_VOTER, false, 0);
 	}
 
 set_jeita_fv:
@@ -758,6 +758,137 @@ static int handle_battery_insertion(struct step_chg_info *chip)
 	return rc;
 }
 
+/* Huaqin modify for OHQC-2986 Change power-on battery protection temperature by gaochao at 2019/05/07 start */
+extern struct smb_charger *smbchg_dev;
+
+#define BAT_TEMPERATURE_NEGATIVE_1	-10
+#define BAT_TEMPERATURE_POSITIVE_1		10
+#define BAT_TEMPERATURE_POSITIVE_49	490
+#define BAT_TEMPERATURE_POSITIVE_51	510
+
+#define CUSTOM_JEITA_HARD		1
+
+#define JEITA_HARD_THRESHOLDS_LEN		2
+
+#define CUSTOM_CONFIG_ONCE_STOP_CHARGING		0
+#define CUSTOM_CONFIG_ONCE_RESUME_CHARGING		1
+
+int smblib_update_jeita(struct smb_charger *chg, u32 *thresholds, int type);
+void custom_set_hard_jeita_dynamic(struct step_chg_info *chip)
+{
+	int rc = 0;
+	static int config_once = CUSTOM_CONFIG_ONCE_STOP_CHARGING;
+	union power_supply_propval bat_temperature = {0, };
+	//union power_supply_propval bat_charging_status = {0, };
+	union power_supply_propval bat_health_status = {0, };
+	u32 jeita_hard_thresholds_1_51_degree[JEITA_HARD_THRESHOLDS_LEN] = {0x57B5, 0x1B49};		// 1    51
+	u32 jeita_hard_thresholds_neg_1_51_degree[JEITA_HARD_THRESHOLDS_LEN] = {0x59DD, 0x1B49};	// -1    51
+	u32 jeita_hard_thresholds_neg_1_49_degree[JEITA_HARD_THRESHOLDS_LEN] = {0x59DD, 0x1D01};	// -1    49
+
+	if (!chip)
+	{
+		pr_err("line=%d: chip is null\n", __LINE__);
+		return;
+	}
+
+	rc = power_supply_get_property(chip->batt_psy, POWER_SUPPLY_PROP_TEMP, &bat_temperature);
+	if (rc < 0)
+	{
+		pr_err("Get battery teperature status failed, rc=%d\n", rc);
+	}
+
+	/*
+	rc = power_supply_get_property(chip->batt_psy, POWER_SUPPLY_PROP_STATUS, &bat_charging_status);
+	if (rc < 0)
+	{
+		pr_err("Get battery charging status failed, rc=%d\n", rc);
+	}
+	*/
+
+	rc = power_supply_get_property(chip->batt_psy, POWER_SUPPLY_PROP_HEALTH, &bat_health_status);
+	if (rc < 0)
+	{
+		pr_err("Get battery health status failed, rc=%d\n", rc);
+	}
+
+	printk("[%s]line=%d: bat_temperature=%d, bat_health_status=%d, config_once=%d\n",
+			__FUNCTION__, __LINE__, bat_temperature.intval, bat_health_status.intval, config_once);
+
+	if ((bat_temperature.intval <= BAT_TEMPERATURE_NEGATIVE_1) /* && (bat_charging_status.intval == POWER_SUPPLY_STATUS_NOT_CHARGING) */
+			&& (bat_health_status.intval == POWER_SUPPLY_HEALTH_COLD))
+	{
+		/* stop charging when battery temperature below -1 degree */
+		if (config_once == CUSTOM_CONFIG_ONCE_STOP_CHARGING)
+		{
+			printk("[%s]line=%d: set hard jeita[1, 51]\n", __FUNCTION__, __LINE__);
+			rc = smblib_update_jeita(smbchg_dev, jeita_hard_thresholds_1_51_degree, CUSTOM_JEITA_HARD);			// 1    51
+			if (rc < 0)
+			{
+				pr_err("line=%d: Couldn't configure Jeita cold threshold rc=%d\n", __LINE__, rc);
+			}
+
+			config_once = CUSTOM_CONFIG_ONCE_RESUME_CHARGING;
+		}
+
+	}
+	else if ((bat_temperature.intval >= BAT_TEMPERATURE_POSITIVE_1) /* && (bat_charging_status.intval == POWER_SUPPLY_STATUS_CHARGING) */
+			&& (bat_health_status.intval == POWER_SUPPLY_HEALTH_COOL))
+	{
+		/* resume charging when battery temperature above 1 degree */
+		if (config_once == CUSTOM_CONFIG_ONCE_RESUME_CHARGING)
+		{
+			printk("[%s]line=%d: set hard jeita[-1, 51]\n", __FUNCTION__, __LINE__);
+			rc = smblib_update_jeita(smbchg_dev, jeita_hard_thresholds_neg_1_51_degree, CUSTOM_JEITA_HARD);		// -1    51
+			if (rc < 0)
+			{
+				pr_err("line=%d: Couldn't configure Jeita cold threshold rc=%d\n", __LINE__, rc);
+			}
+
+			config_once = CUSTOM_CONFIG_ONCE_STOP_CHARGING;
+		}
+
+	}
+	else if ((bat_temperature.intval >= BAT_TEMPERATURE_POSITIVE_51) /* && (bat_charging_status.intval == POWER_SUPPLY_STATUS_NOT_CHARGING) */
+			&& ((bat_health_status.intval == POWER_SUPPLY_HEALTH_OVERHEAT) || (bat_health_status.intval == POWER_SUPPLY_HEALTH_HOT)))
+	{
+		/* stop charging when battery temperature above 51 degree */
+		if (config_once == CUSTOM_CONFIG_ONCE_STOP_CHARGING)
+		{
+			printk("[%s]line=%d: set hard jeita[-1, 49]\n", __FUNCTION__, __LINE__);
+			rc = smblib_update_jeita(smbchg_dev, jeita_hard_thresholds_neg_1_49_degree, CUSTOM_JEITA_HARD);		// -1    49
+			if (rc < 0)
+			{
+				pr_err("line=%d: Couldn't configure Jeita cold threshold rc=%d\n", __LINE__, rc);
+			}
+
+			config_once = CUSTOM_CONFIG_ONCE_RESUME_CHARGING;
+		}
+
+	}
+	else if ((bat_temperature.intval <= BAT_TEMPERATURE_POSITIVE_49) /* && (bat_charging_status.intval == POWER_SUPPLY_STATUS_CHARGING) */
+			&& (bat_health_status.intval == POWER_SUPPLY_HEALTH_WARM))
+	{
+		/* resume charging when battery temperature below 49 degree */
+		if (config_once == CUSTOM_CONFIG_ONCE_RESUME_CHARGING)
+		{
+			printk("[%s]line=%d: set hard jeita[-1, 51]\n", __FUNCTION__, __LINE__);
+			rc = smblib_update_jeita(smbchg_dev, jeita_hard_thresholds_neg_1_51_degree, CUSTOM_JEITA_HARD);		// -1    51
+			if (rc < 0)
+			{
+				pr_err("line=%d: Couldn't configure Jeita cold threshold rc=%d\n", __LINE__, rc);
+			}
+
+			config_once = CUSTOM_CONFIG_ONCE_STOP_CHARGING;
+		}
+
+	}
+	else
+	{
+		printk("[%s]line=%d: set nothing\n", __FUNCTION__, __LINE__);
+	}
+}
+/* Huaqin modify for OHQC-2986 Change power-on battery protection temperature by gaochao at 2019/05/07 end */
+
 static void status_change_work(struct work_struct *work)
 {
 	struct step_chg_info *chip = container_of(work,
@@ -769,6 +900,10 @@ static void status_change_work(struct work_struct *work)
 		goto exit_work;
 
 	handle_battery_insertion(chip);
+
+	/* Huaqin modify for OHQC-2986 Change power-on battery protection temperature by gaochao at 2019/05/07 start */
+	custom_set_hard_jeita_dynamic(chip);
+	/* Huaqin modify for OHQC-2986 Change power-on battery protection temperature by gaochao at 2019/05/07 end */
 
 	/* skip elapsed_us debounce for handling battery temperature */
 	rc = handle_jeita(chip);
@@ -785,8 +920,8 @@ static void status_change_work(struct work_struct *work)
 		power_supply_get_property(chip->usb_psy,
 				POWER_SUPPLY_PROP_PRESENT, &prop);
 		if (!prop.intval) {
-			if (chip->usb_icl_votable)
-				vote(chip->usb_icl_votable, JEITA_VOTER,
+			if (chip->chg_disable_votable)
+				vote(chip->chg_disable_votable, JEITA_VOTER,
 						false, 0);
 		}
 	}

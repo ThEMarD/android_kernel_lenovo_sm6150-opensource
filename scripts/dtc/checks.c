@@ -929,8 +929,8 @@ static void check_avoid_default_addr_size(struct check *c, struct dt_info *dti,
 		FAIL(c, dti, "Relying on default #size-cells value for %s",
 		     node->fullpath);
 }
-WARNING(avoid_default_addr_size, check_avoid_default_addr_size, NULL,
-	&addr_size_cells);
+/*WARNING(avoid_default_addr_size, check_avoid_default_addr_size, NULL,
+	&addr_size_cells);*/
 
 static void check_obsolete_chosen_interrupt_controller(struct check *c,
 						       struct dt_info *dti,

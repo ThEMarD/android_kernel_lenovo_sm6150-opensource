@@ -1749,6 +1749,9 @@
 		thermal-governor = "step_wise";
 		thermal-sensors = <&pm6150_adc_tm ADC_AMUX_THM4_PU2>;
 		wake-capable-sensor;
+		/* Huaqin modify for JD2020-509 Import thermal control by gaochao at 2019/03/06 start */
+		status = "disabled";
+		/* Huaqin modify for JD2020-509 Import thermal control by gaochao at 2019/03/06 end */
 		trips {
 			batt_trip0: batt-trip0 {
 				temperature = <43000>;

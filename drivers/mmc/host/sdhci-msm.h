@@ -19,6 +19,10 @@
 #include <linux/pm_qos.h>
 #include "sdhci-pltfm.h"
 
+#define CORE_FREQ_100MHZ	(100 * 1000 * 1000)
+
+#define NUM_TUNING_PHASES		16
+#define MAX_DRV_TYPES_SUPPORTED_HS200	4
 /* This structure keeps information per regulator */
 struct sdhci_msm_reg_data {
 	/* voltage regulator handle */
@@ -269,11 +273,21 @@ struct sdhci_msm_host {
 	const struct sdhci_msm_offset *offset;
 	bool core_3_0v_support;
 	bool pltfm_init_done;
+#ifdef CONFIG_MMC_SDHCI_MSM_BH201
+	int sdr50_notuning_sela_inject_flag;
+	int sdr50_notuning_crc_error_flag;
+	u32 sdr50_notuning_sela_rx_inject;
+#endif
 	struct sdhci_msm_regs_restore regs_restore;
 	bool use_7nm_dll;
 	int soc_min_rev;
 	struct workqueue_struct *pm_qos_wq;
 	struct sdhci_msm_dll_hsr *dll_hsr;
+};
+
+enum dll_init_context {
+        DLL_INIT_NORMAL = 0,
+        DLL_INIT_FROM_CX_COLLAPSE_EXIT,
 };
 
 extern char *saved_command_line;
@@ -288,5 +302,14 @@ void sdhci_msm_pm_qos_cpu_vote(struct sdhci_host *host,
 		struct sdhci_msm_pm_qos_latency *latency, int cpu);
 bool sdhci_msm_pm_qos_cpu_unvote(struct sdhci_host *host, int cpu, bool async);
 
-
+#ifdef CONFIG_MMC_SDHCI_MSM_BH201
+int sdhci_msm_hs400_dll_calibration(struct sdhci_host *host);
+int msm_init_cm_dll(struct sdhci_host *host, enum dll_init_context init_context);
+int msm_config_cm_dll_phase(struct sdhci_host *host, u8 phase);
+void sdhci_msm_set_mmc_drv_type(struct sdhci_host *host, u32 opcode,
+		u8 drv_type);
+int msm_find_most_appropriate_phase(struct sdhci_host *host,
+				u8 *phase_table, u8 total_phases);
+int sdhci_msm_execute_tuning(struct sdhci_host *host, u32 opcode);
+#endif
 #endif /* __SDHCI_MSM_H__ */

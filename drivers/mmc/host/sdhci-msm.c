@@ -42,6 +42,7 @@
 #include <trace/events/mmc.h>
 
 #include "sdhci-msm.h"
+#include "sdhci-msm-bh201.h"
 #include "sdhci-msm-ice.h"
 #include "cmdq_hci.h"
 
@@ -165,14 +166,11 @@
 #define SDHCI_MSM_MAX_SEGMENTS  (1 << 9)
 #define SDHCI_MSM_MMC_CLK_GATE_DELAY	200 /* msecs */
 
-#define CORE_FREQ_100MHZ	(100 * 1000 * 1000)
 #define TCXO_FREQ		19200000
 
 #define INVALID_TUNING_PHASE	-1
 #define sdhci_is_valid_gpio_wakeup_int(_h) ((_h)->pdata->sdiowakeup_irq >= 0)
 
-#define NUM_TUNING_PHASES		16
-#define MAX_DRV_TYPES_SUPPORTED_HS200	4
 #define MSM_AUTOSUSPEND_DELAY_MS 100
 
 #define RCLK_TOGGLE 0x2
@@ -327,14 +325,14 @@ void sdhci_msm_writel_relaxed(u32 val, struct sdhci_host *host, u32 offset)
 /* Timeout value to avoid infinite waiting for pwr_irq */
 #define MSM_PWR_IRQ_TIMEOUT_MS 5000
 
-static const u32 tuning_block_64[] = {
+const u32 tuning_block_64[16] = {
 	0x00FF0FFF, 0xCCC3CCFF, 0xFFCC3CC3, 0xEFFEFFFE,
 	0xDDFFDFFF, 0xFBFFFBFF, 0xFF7FFFBF, 0xEFBDF777,
 	0xF0FFF0FF, 0x3CCCFC0F, 0xCFCC33CC, 0xEEFFEFFF,
 	0xFDFFFDFF, 0xFFBFFFDF, 0xFFF7FFBB, 0xDE7B7FF7
 };
 
-static const u32 tuning_block_128[] = {
+const u32 tuning_block_128[32] = {
 	0xFF00FFFF, 0x0000FFFF, 0xCCCCFFFF, 0xCCCC33CC,
 	0xCC3333CC, 0xFFFFCCCC, 0xFFFFEEFF, 0xFFEEEEFF,
 	0xFFDDFFFF, 0xDDDDFFFF, 0xBBFFFFFF, 0xBBFFFFFF,
@@ -366,12 +364,12 @@ enum vdd_io_level {
 	 */
 	VDD_IO_SET_LEVEL,
 };
-
+/*
 enum dll_init_context {
 	DLL_INIT_NORMAL = 0,
 	DLL_INIT_FROM_CX_COLLAPSE_EXIT,
 };
-
+*/
 static unsigned int sdhci_msm_get_sup_clk_rate(struct sdhci_host *host,
 						u32 req_clk);
 
@@ -506,7 +504,7 @@ static int sdhci_msm_config_auto_tuning_cmd(struct sdhci_host *host,
 	return rc;
 }
 
-static int msm_config_cm_dll_phase(struct sdhci_host *host, u8 phase)
+int msm_config_cm_dll_phase(struct sdhci_host *host, u8 phase)
 {
 	int rc = 0;
 	struct sdhci_pltfm_host *pltfm_host = sdhci_priv(host);
@@ -582,7 +580,7 @@ out:
  * selected DLL clock output phase.
  */
 
-static int msm_find_most_appropriate_phase(struct sdhci_host *host,
+int msm_find_most_appropriate_phase(struct sdhci_host *host,
 				u8 *phase_table, u8 total_phases)
 {
 	int ret;
@@ -719,7 +717,7 @@ static inline void msm_cm_dll_set_freq(struct sdhci_host *host)
 }
 
 /* Initialize the DLL (Programmable Delay Line ) */
-static int msm_init_cm_dll(struct sdhci_host *host,
+int msm_init_cm_dll(struct sdhci_host *host,
 				enum dll_init_context init_context)
 {
 	struct sdhci_pltfm_host *pltfm_host = sdhci_priv(host);
@@ -1129,7 +1127,7 @@ out:
 	return ret;
 }
 
-static int sdhci_msm_hs400_dll_calibration(struct sdhci_host *host)
+int sdhci_msm_hs400_dll_calibration(struct sdhci_host *host)
 {
 	int ret = 0;
 	struct sdhci_pltfm_host *pltfm_host = sdhci_priv(host);
@@ -1170,7 +1168,7 @@ out:
 	return ret;
 }
 
-static void sdhci_msm_set_mmc_drv_type(struct sdhci_host *host, u32 opcode,
+void sdhci_msm_set_mmc_drv_type(struct sdhci_host *host, u32 opcode,
 		u8 drv_type)
 {
 	struct mmc_command cmd = {0};
@@ -2520,7 +2518,35 @@ static int sdhci_msm_vreg_disable(struct sdhci_msm_reg_data *vreg)
 out:
 	return ret;
 }
+#ifdef  CONFIG_MMC_SDHCI_MSM_BH201
+static int sdhci_msm_setup_vreg_vddio(struct sdhci_msm_pltfm_data *pdata,
+			bool enable, bool is_init)
+{
+	int ret = 0;
+	struct sdhci_msm_slot_reg_data *curr_slot;
+	struct sdhci_msm_reg_data *vreg_vdd_io;
 
+	curr_slot = pdata->vreg_data;
+	if (!curr_slot) {
+		pr_debug("%s: vreg info unavailable,assuming the slot is powered by always on domain\n",
+			 __func__);
+		goto out;
+	}
+
+	vreg_vdd_io = curr_slot->vdd_io_data;
+
+	if (vreg_vdd_io){
+		if (enable)
+			ret = sdhci_msm_vreg_enable(vreg_vdd_io);
+		else
+			ret = sdhci_msm_vreg_disable(vreg_vdd_io);
+		if (ret)
+			goto out;
+	}
+out:
+	return ret;
+}
+#endif
 static int sdhci_msm_setup_vreg(struct sdhci_msm_pltfm_data *pdata,
 			bool enable, bool is_init)
 {
@@ -2776,6 +2802,11 @@ static irqreturn_t sdhci_msm_pwr_irq(int irq, void *data)
 
 	/* Handle BUS ON/OFF*/
 	if (irq_status & CORE_PWRCTL_BUS_ON) {
+#ifdef CONFIG_MMC_SDHCI_MSM_BH201
+		if (sdhci_bht_target_host(host))
+			gpio_direction_output(GPIO_SD_CARD_PWR, 1);
+
+#endif
 		ret = sdhci_msm_setup_vreg(msm_host->pdata, true, false);
 		if (!ret) {
 			ret = sdhci_msm_setup_pins(msm_host->pdata, true);
@@ -2791,9 +2822,18 @@ static irqreturn_t sdhci_msm_pwr_irq(int irq, void *data)
 		io_level = REQ_IO_HIGH;
 	}
 	if (irq_status & CORE_PWRCTL_BUS_OFF) {
-		if (msm_host->pltfm_init_done)
+		if (msm_host->pltfm_init_done) {
+#ifdef CONFIG_MMC_SDHCI_MSM_BH201
+			if (sdhci_bht_target_host(host)){
+				gpio_direction_output(GPIO_SD_CARD_PWR, 0);//set PWR GPIO off
+				ret = sdhci_msm_setup_vreg_vddio(msm_host->pdata,
+					false, false);
+			}
+			else
+#endif
 			ret = sdhci_msm_setup_vreg(msm_host->pdata,
 					false, false);
+		}
 		if (!ret) {
 			ret = sdhci_msm_setup_pins(msm_host->pdata, false);
 			ret |= sdhci_msm_set_vdd_io_vol(msm_host->pdata,
@@ -3457,6 +3497,15 @@ static void sdhci_msm_set_clock(struct sdhci_host *host, unsigned int clock)
 
 	curr_pwrsave = !!(readl_relaxed(host->ioaddr +
 	msm_host_offset->CORE_VENDOR_SPEC) & CORE_CLK_PWRSAVE);
+#ifdef CONFIG_MMC_SDHCI_MSM_BH201
+	if ( sdhci_bht_target_host(host)){
+		writel_relaxed(readl_relaxed(host->ioaddr + msm_host_offset->CORE_VENDOR_SPEC)
+					& ~CORE_CLK_PWRSAVE,
+					host->ioaddr + msm_host_offset->CORE_VENDOR_SPEC);
+		}
+	else
+	{
+#endif
 	if ((clock > 400000) &&
 	    !curr_pwrsave && card && mmc_host_may_gate_card(card))
 		writel_relaxed(readl_relaxed(host->ioaddr +
@@ -3473,6 +3522,9 @@ static void sdhci_msm_set_clock(struct sdhci_host *host, unsigned int clock)
 				& ~CORE_CLK_PWRSAVE, host->ioaddr +
 				msm_host_offset->CORE_VENDOR_SPEC);
 
+#ifdef CONFIG_MMC_SDHCI_MSM_BH201
+	}
+#endif
 	sup_clock = sdhci_msm_get_sup_clk_rate(host, clock);
 	if ((curr_ios.timing == MMC_TIMING_UHS_DDR50) ||
 		(curr_ios.timing == MMC_TIMING_MMC_DDR52) ||
@@ -4520,7 +4572,11 @@ static struct sdhci_ops sdhci_msm_ops = {
 	.crypto_engine_reset = sdhci_msm_ice_reset,
 	.set_uhs_signaling = sdhci_msm_set_uhs_signaling,
 	.check_power_status = sdhci_msm_check_power_status,
+#ifdef CONFIG_MMC_SDHCI_MSM_BH201
+	.platform_execute_tuning = sdhci_bht_execute_tuning,
+#else
 	.platform_execute_tuning = sdhci_msm_execute_tuning,
+#endif
 	.enhanced_strobe = sdhci_msm_enhanced_strobe,
 	.toggle_cdr = sdhci_msm_toggle_cdr,
 	.get_max_segments = sdhci_msm_max_segs,

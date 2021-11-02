@@ -24,6 +24,7 @@
 #include <dt-bindings/soc/qcom,tcs-mbox.h>
 #include <dt-bindings/clock/qcom,cpucc-sm8150.h>
 #include <dt-bindings/msm/msm-bus-ids.h>
+#include <generated/autoconf.h>
 
 #define MHZ_TO_MBPS(mhz, w) ((mhz * 1000000 * w) / (1024 * 1024))
 #define BW_OPP_ENTRY(mhz, w) opp-mhz {opp-hz = /bits/ 64 <MHZ_TO_MBPS(mhz, w)>;}
@@ -486,7 +487,7 @@
 			compatible = "android,firmware";
 			vbmeta {
 				compatible = "android,vbmeta";
-				parts = "vbmeta,boot,system,vendor,dtbo";
+				parts = "vbmeta,boot,system,vendor,dtbo,recovery";
 			};
 			fstab {
 				compatible = "android,fstab";
@@ -495,7 +496,7 @@
 					dev = "/dev/block/platform/soc/1d84000.ufshc/by-name/vendor";
 					type = "ext4";
 					mnt_flags = "ro,barrier=1,discard";
-					fsmgr_flags = "wait,slotselect,avb";
+					fsmgr_flags = "wait,avb";
 					status = "ok";
 				};
 			};
@@ -534,7 +535,7 @@
 		removed_region: removed_region@86200000 {
 			compatible = "removed-dma-pool";
 			no-map;
-			reg = <0 0x86200000 0 0x2d00000>;
+			reg = <0 0x86200000 0 0x4900000>;
 		};
 
 		pil_camera_mem: camera_region@8ab00000 {
@@ -607,6 +608,11 @@
 			compatible = "removed-dma-pool";
 			no-map;
 			reg = <0x0 0x9f800000 0x0 0x1e00000>;
+		};
+
+		pstore_mem: pstore_region@0xaff00000 {
+			compatible = "removed-dma-pool";
+			reg = <0 0xaff00000 0 0x100000>;
 		};
 
 		adsp_mem: adsp_region {
@@ -2273,7 +2279,7 @@
 
 	qcom_seecom: qseecom@86d00000 {
 		compatible = "qcom,qseecom";
-		reg = <0x86d00000 0xe00000>;
+		reg = <0x86d00000 0x3e00000>;
 		reg-names = "secapp-region";
 		memory-region = <&qseecom_mem>;
 		qcom,hlos-num-ce-hw-instances = <1>;
@@ -3309,6 +3315,9 @@
 #include "pm6150.dtsi"
 #include "pm6150l.dtsi"
 #include "sdmmagpie-pinctrl.dtsi"
+#ifdef CONFIG_PRODUCT_JD20
+#include "lenovo-jd20-pinctrl.dtsi"
+#endif
 #include "pm8009.dtsi"
 #include "sdmmagpie-regulator.dtsi"
 #include "sdmmagpie-camera.dtsi"
@@ -3324,6 +3333,14 @@
 		pinctrl-names = "default";
 		pinctrl-0 = <&fsa_usbc_ana_en>;
 	};
+#ifdef CONFIG_PRODUCT_JD20
+	/* Huaqin add for bring up smartPA config i2c by xuyuqing at 2019/01/28 start */
+	tfa98xx@34 {
+		compatible = "nxp,tfa98xx";
+		reg = <0x34>;
+	};
+	/* Huaqin add for bring up smartPA config i2c by xuyuqing at 2019/01/28 end */
+#endif
 };
 
 #include "sdmmagpie-audio.dtsi"

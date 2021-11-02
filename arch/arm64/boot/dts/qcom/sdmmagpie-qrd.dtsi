@@ -14,11 +14,13 @@
 #include <dt-bindings/pinctrl/qcom,pmic-gpio.h>
 #include <dt-bindings/iio/qcom,spmi-vadc.h>
 #include <dt-bindings/input/input.h>
+#include <generated/autoconf.h>
 #include "sdmmagpie-thermal-overlay.dtsi"
 
 #include "sdmmagpie-sde-display.dtsi"
 #include "sdmmagpie-camera-sensor-qrd.dtsi"
 &soc {
+/*
 	fpc1020 {
 		compatible = "fpc,fpc1020";
 		interrupt-parent = <&tlmm>;
@@ -36,17 +38,23 @@
 		pinctrl-1 = <&fpc_reset_high>;
 		pinctrl-2 = <&fpc_int_low>;
 	};
+*/
 
 	mtp_batterydata: qcom,battery-data {
 		qcom,batt-id-range-pct = <15>;
 		#include "qg-batterydata-alium-3600mah.dtsi"
 		#include "qg-batterydata-mlp466076-3200mah.dtsi"
+                /* Huaqin add for JD2020-15  Update battery parameters from zippo_8150 project by yangxinlu at 2019/01/24 start */
+                #include "Huaqin_ZQL1828_4000mAh_averaged_MasterSlave_Jan8rd2019_PM7150.dtsi"
+                /* Huaqin add for JD2020-15  Update battery parameters from zippo_8150 project by yangxinlu at 2019/01/24 end */
+
 	};
 };
 
 &qupv3_se7_i2c{
-	qcom,i2c-touch-active="st,fts";
+	//qcom,i2c-touch-active="st,fts";
 	status = "ok";
+	/*
 	st_fts@49 {
 		compatible = "st,fts";
 		reg = <0x49>;
@@ -62,54 +70,7 @@
 		st,regulator_dvdd = "vdd";
 		st,regulator_avdd = "avdd";
 	};
-};
-
-&tlmm {
-	pmx_ts_active {
-		ts_active: ts_active {
-			mux {
-				pins = "gpio8", "gpio9";
-				function = "gpio";
-			};
-
-			config {
-				pins = "gpio8", "gpio9";
-				drive-strength = <8>;
-				bias-pull-up;
-			};
-		};
-	};
-
-	pmx_ts_int_suspend {
-		ts_int_suspend: ts_int_suspend {
-			mux {
-				pins = "gpio9";
-				function = "gpio";
-			};
-
-			config {
-				pins = "gpio9";
-				drive-strength = <2>;
-				bias-pull-down;
-			};
-		};
-	};
-
-	pmx_ts_reset_suspend {
-		ts_reset_suspend: ts_reset_suspend {
-				mux {
-					pins = "gpio8";
-					function = "gpio";
-				};
-
-				config {
-					pins = "gpio8";
-					drive-strength = <2>;
-					bias-pull-down;
-				};
-			};
-	};
-
+	*/
 };
 
 &qupv3_se8_2uart {
@@ -158,8 +119,10 @@
 		compatible = "qcom,nq-nci";
 		reg = <0x28>;
 		qcom,nq-irq = <&tlmm 37 0x00>;
-		qcom,nq-ven = <&tlmm 12 0x00>;
-		qcom,nq-firm = <&tlmm 36 0x00>;
+		// HUAQIN change for camera by likai at 20190223 start
+		qcom,nq-ven = <&tlmm 37 0x00>;
+		qcom,nq-firm = <&tlmm 37 0x00>;
+		// HUAQIN change for camera by likai at 20190223 end
 		qcom,nq-clkreq = <&tlmm 31 0x00>;
 		qcom,nq-esepwr = <&tlmm 94 0x00>;
 		interrupt-parent = <&tlmm>;
@@ -193,7 +156,7 @@
 
 &sdhc_2 {
 	vdd-supply = <&pm6150l_l9>;
-	qcom,vdd-voltage-level = <2950000 2950000>;
+	qcom,vdd-voltage-level = <3312000 3312000>;
 	qcom,vdd-current-level = <0 800000>;
 
 	vdd-io-supply = <&pm6150l_l6>;
@@ -228,6 +191,23 @@
 };
 
 &dsi_sw43404_amoled_fhd_plus_cmd {
+	qcom,panel-supply-entries = <&dsi_panel_pwr_supply_labibb_amoled>;
+	qcom,mdss-dsi-bl-pmic-control-type = "bl_ctrl_dcs";
+	qcom,mdss-dsi-bl-min-level = <1>;
+	qcom,mdss-dsi-bl-max-level = <1023>;
+	qcom,platform-te-gpio = <&tlmm 10 0>;
+	qcom,platform-reset-gpio = <&pm6150l_gpios 9 0>;
+};
+
+&dsi_nt37770f_tm_amoled_1080p_cmd {
+	qcom,panel-supply-entries = <&dsi_panel_pwr_supply_labibb_amoled>;
+	qcom,mdss-dsi-bl-pmic-control-type = "bl_ctrl_dcs";
+	qcom,mdss-dsi-bl-min-level = <1>;
+	qcom,mdss-dsi-bl-max-level = <2047>;
+	qcom,platform-te-gpio = <&tlmm 10 0>;
+	qcom,platform-reset-gpio = <&pm6150l_gpios 9 0>;
+};
+&dsi_ams639wk07_amoled_1080p_cmd {
 	qcom,panel-supply-entries = <&dsi_panel_pwr_supply_labibb_amoled>;
 	qcom,mdss-dsi-bl-pmic-control-type = "bl_ctrl_dcs";
 	qcom,mdss-dsi-bl-min-level = <1>;
@@ -274,7 +254,13 @@
 
 &pm6150_qg {
 	qcom,battery-data = <&mtp_batterydata>;
-	qcom,qg-iterm-ma = <100>;
+/* Huaqin modify for JD2020-15 set iterm-ma for charging time to full by yangxinlu at 2019/02/20 start */
+/* Huaqin modified for JD2020-580 by tangqingyong at 2019-03-13 start */
+/* Huaqin modified for OHQC-2216 Set charge terminate current to 250mA by wenyaqi at 2019/04/15 start */
+        qcom,qg-iterm-ma = <320>;
+/* Huaqin modified for OHQC-2216 Set charge terminate current to 250mA by wenyaqi at 2019/04/15 end */
+/* Huaqin modified for JD2020-580 by tangqingyong at 2019-03-13 end */
+/* Huaqin modify for JD2020-15 set iterm-ma for charging time to full by yangxinlu at 2019/02/20 end */
 	qcom,hold-soc-while-full;
 	qcom,linearize-soc;
 	qcom,cl-feedback-on;
@@ -298,11 +284,26 @@
 	qcom,battery-data = <&mtp_batterydata>;
 	qcom,auto-recharge-soc = <98>;
 	qcom,sw-jeita-enable;
+        /* Huaqin modify for JD2020-160 Config JEITA according to battery by yangxinlu at 2019/01/29 start */
+        qcom,step-charging-enable;
+        /* Huaqin modify for JD2020-160 Config JEITA according to battery by yangxinlu at 2019/01/29 end */
 	qcom,fcc-stepping-enable;
 	qcom,suspend-input-on-debug-batt;
 	qcom,sec-charger-config = <1>;
+/* Huaqin modify for JD2020-15 set iterm-ma for charging time to full by yangxinlu at 2019/02/20 start */
+        qcom,chg-term-src = <1>;
+/* Huaqin modified for JD2020-580 by tangqingyong at 2019-03-13 start */
+/* Huaqin modified for OHQC-2216 Set charge terminate current to 250mA by wenyaqi at 2019/04/15 start */
+        qcom,chg-term-current-ma = <(-250)>;
+/* Huaqin modified for OHQC-2216 Set charge terminate current to 250mA by wenyaqi at 2019/04/15 end */
+/* Huaqin modified for JD2020-580 by tangqingyong at 2019-03-13 end */
+/* Huaqin modify for JD2020-15 set iterm-ma for charging time to full by yangxinlu at 2019/02/20 end */
+/* Huaqin modify by tangqingyong for JD2020-739 at 20190328 start*/
+/* Huaqin modify for OHQC-2861 reduce thermal current threeshold by wenyaqi at 2019/04/29 start*/
 	qcom,thermal-mitigation = <4200000 3500000 3000000
-			2500000 2000000 1500000 1000000 500000>;
+			2200000 2100000 1500000 1000000 650000>;
+/* Huaqin modify for OHQC-2861 reduce thermal current threeshold by wenyaqi at 2019/04/29 end*/
+/* Huaqin modify by tangqingyong for JD2020-739 at 20190328 end*/
 	dpdm-supply = <&qusb_phy0>;
 };
 

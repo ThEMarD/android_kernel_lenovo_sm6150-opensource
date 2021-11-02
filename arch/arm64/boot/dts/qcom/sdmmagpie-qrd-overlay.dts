@@ -18,6 +18,9 @@
 
 #include "sdmmagpie-audio-overlay.dtsi"
 #include "sdmmagpie-qrd.dtsi"
+#ifdef CONFIG_PRODUCT_JD20
+#include "lenovo-jd20.dtsi"
+#endif
 
 / {
 	model = "QRD";
@@ -25,11 +28,7 @@
 	qcom,msm-id = <365 0x0>;
 	qcom,board-id = <11 0>;
 };
-
-&dsi_sw43404_amoled_video_display {
-	qcom,dsi-display-active;
-};
-
+#ifndef CONFIG_PRODUCT_JD20
 &sm6150_snd {
 	qcom,model = "sm6150-wcd9375qrd-snd-card";
 	qcom,audio-routing =
@@ -68,3 +67,4 @@
 	qcom,wsa-devs = <&wsa881x_0211>, <&wsa881x_0213>;
 	qcom,wsa-aux-dev-prefix = "SpkrLeft", "SpkrLeft";
 };
+#endif

@@ -28,6 +28,10 @@
 #include "storm-watch.h"
 #include "schgm-flash.h"
 
+/* Huaqin add for JD2020-159 System don't be into sleep mode while plug in adapter or USB by yangxinlu at 2019/02/16 start */
+#include <linux/pm_wakeup.h>
+/* Huaqin add for JD2020-159 System don't be into sleep mode while plug in adapter or USB by yangxinlu at 2019/02/16 end */
+
 #define smblib_err(chg, fmt, ...)		\
 	pr_err("%s: %s: " fmt, chg->name,	\
 		__func__, ##__VA_ARGS__)	\
@@ -46,6 +50,21 @@
 	((typec_mode == POWER_SUPPLY_TYPEC_SOURCE_MEDIUM	\
 	|| typec_mode == POWER_SUPPLY_TYPEC_SOURCE_HIGH)	\
 	&& !chg->typec_legacy)
+/* Huaqin add for JD2020-159 System don't be into sleep mode while plug in adapter or USB by yangxinlu at 2019/02/16 start */
+static bool usbin_flag = false;
+extern struct wakeup_source lenovo_chg_lock;
+void lenovo_smblib_stay_awake(void)
+{
+       printk(KERN_ALERT "[%s]line=%d: lenovo set smblib_stay_awake\n", __FUNCTION__, __LINE__);
+       __pm_stay_awake(&lenovo_chg_lock);
+}
+
+void lenovo_smblib_relax(void)
+{
+       printk(KERN_ALERT "[%s]line=%d: lenovo set smblib_relax\n", __FUNCTION__, __LINE__);
+       __pm_relax(&lenovo_chg_lock);
+}
+/* Huaqin add for JD2020-159 System don't be into sleep mode while plug in adapter or USB by yangxinlu at 2019/02/16 end */
 
 static void update_sw_icl_max(struct smb_charger *chg, int pst);
 
@@ -943,9 +962,6 @@ void smblib_hvdcp_exit_config(struct smb_charger *chg)
 static int smblib_request_dpdm(struct smb_charger *chg, bool enable)
 {
 	int rc = 0;
-
-	if (chg->pr_swap_in_progress)
-		return 0;
 
 	/* fetch the DPDM regulator */
 	if (!chg->dpdm_reg && of_get_property(chg->dev->of_node,
@@ -3774,6 +3790,12 @@ static int smblib_handle_usb_current(struct smb_charger *chg,
 					smblib_err(chg,
 						"Couldn't set SDP ICL rc=%d\n",
 						rc);
+                                /* Huaqin modify for JD2020-163 Config float charge to 500ma by yangxinlu at 2019/02/01 start */
+                                /* Qcom checked for USB_FLOAT(APSD recongnize result)set 500ma by Xuehua Ding (caseid:03864858) at 2019/02/01 start */
+                                vote(chg->usb_icl_votable,USB_PSY_VOTER, false, SDP_CURRENT_UA);
+                                vote(chg->usb_icl_votable,SW_ICL_MAX_VOTER, true, SDP_CURRENT_UA);
+                                /* Qcom checked for USB_FLOAT(APSD recongnize result)set 500ma by Xuehua Ding (caseid:03864858) at 2019/02/01 end */
+                                /* Huaqin modify for JD2020-163 Config float charge to 500ma by yangxinlu at 2019/02/01 end */
 
 				return rc;
 			}
@@ -4135,8 +4157,12 @@ int smblib_set_prop_pd_in_hard_reset(struct smb_charger *chg,
 
 #define JEITA_SOFT			0
 #define JEITA_HARD			1
-static int smblib_update_jeita(struct smb_charger *chg, u32 *thresholds,
+/* Huaqin modify for OHQC-2986 Change power-on battery protection temperature by gaochao at 2019/05/07 start */
+//static int smblib_update_jeita(struct smb_charger *chg, u32 *thresholds,
+//								int type)
+int smblib_update_jeita(struct smb_charger *chg, u32 *thresholds,
 								int type)
+/* Huaqin modify for OHQC-2986 Change power-on battery protection temperature by gaochao at 2019/05/07 end */
 {
 	int rc;
 	u16 temp, base;
@@ -4746,8 +4772,6 @@ void smblib_usb_plugin_locked(struct smb_charger *chg)
 						chg->chg_freq.freq_removal);
 
 	if (vbus_rising) {
-		cancel_delayed_work_sync(&chg->pr_swap_detach_work);
-		vote(chg->awake_votable, DETACH_DETECT_VOTER, false, 0);
 		rc = smblib_request_dpdm(chg, true);
 		if (rc < 0)
 			smblib_err(chg, "Couldn't to enable DPDM rc=%d\n", rc);
@@ -4824,6 +4848,29 @@ void smblib_usb_plugin_locked(struct smb_charger *chg)
 
 		smblib_update_usb_type(chg);
 	}
+
+        /* Huaqin add for JD2020-159 System don't be into sleep mode while plug in adapter or USB by yangxinlu at 2019/02/16 start */
+        if (vbus_rising)        //plug in USB or Adaptor
+        {
+                smblib_err(chg, "[%s]line=%d: vbus_rising=%d; usbin_flag=%d\n", __FUNCTION__, __LINE__, vbus_rising, usbin_flag);
+                if (!usbin_flag)
+                {
+                    smblib_err(chg, "[%s]line=%d: lenovo plug in USB, call lenovo_smblib_stay_awake\n", __FUNCTION__, __LINE__);
+                    usbin_flag = true;
+                    lenovo_smblib_stay_awake();
+                }
+        }
+        else            //plug out USB or Adaptor
+        {
+                smblib_err(chg, "[%s]line=%d: vbus_rising=%d; usbin_flag=%d\n", __FUNCTION__, __LINE__, vbus_rising, usbin_flag);
+                if (usbin_flag)
+                {
+                    smblib_err(chg, "[%s]line=%d: lenovo plug out USB, call lenovo_smblib_relax\n", __FUNCTION__, __LINE__);
+                    usbin_flag = false;
+                    lenovo_smblib_relax();
+                }
+        }
+        /* Huaqin add for JD2020-159 System don't be into sleep mode while plug in adapter or USB by yangxinlu at 2019/02/16 end */
 
 	if (chg->connector_type == POWER_SUPPLY_CONNECTOR_MICRO_USB)
 		smblib_micro_usb_plugin(chg, vbus_rising);
@@ -5852,23 +5899,13 @@ int smblib_get_prop_pr_swap_in_progress(struct smb_charger *chg,
 	return 0;
 }
 
-#define DETACH_DETECT_DELAY_MS 20
 int smblib_set_prop_pr_swap_in_progress(struct smb_charger *chg,
 				const union power_supply_propval *val)
 {
 	int rc;
 	u8 stat, orientation;
 
-	smblib_dbg(chg, PR_MISC, "Requested PR_SWAP %d\n", val->intval);
 	chg->pr_swap_in_progress = val->intval;
-
-	/* check for cable removal during pr_swap */
-	if (!chg->pr_swap_in_progress) {
-		cancel_delayed_work_sync(&chg->pr_swap_detach_work);
-		vote(chg->awake_votable, DETACH_DETECT_VOTER, true, 0);
-		schedule_delayed_work(&chg->pr_swap_detach_work,
-				msecs_to_jiffies(DETACH_DETECT_DELAY_MS));
-	}
 
 	rc = smblib_masked_write(chg, TYPE_C_DEBOUNCE_OPTION_REG,
 			REDUCE_TCCDEBOUNCE_TO_2MS_BIT,
@@ -5921,28 +5958,6 @@ int smblib_set_prop_pr_swap_in_progress(struct smb_charger *chg,
 /***************
  * Work Queues *
  ***************/
-static void smblib_pr_swap_detach_work(struct work_struct *work)
-{
-	struct smb_charger *chg = container_of(work, struct smb_charger,
-						pr_swap_detach_work.work);
-	int rc;
-	u8 stat;
-
-	rc = smblib_read(chg, TYPE_C_STATE_MACHINE_STATUS_REG, &stat);
-	if (rc < 0) {
-		smblib_err(chg, "Couldn't read STATE_MACHINE_STS rc=%d\n", rc);
-		goto out;
-	}
-	smblib_dbg(chg, PR_REGISTER, "STATE_MACHINE_STS %x\n", stat);
-	if (!(stat & TYPEC_ATTACH_DETACH_STATE_BIT)) {
-		rc = smblib_request_dpdm(chg, false);
-		if (rc < 0)
-			smblib_err(chg, "Couldn't disable DPDM rc=%d\n", rc);
-	}
-out:
-	vote(chg->awake_votable, DETACH_DETECT_VOTER, false, 0);
-}
-
 static void smblib_uusb_otg_work(struct work_struct *work)
 {
 	struct smb_charger *chg = container_of(work, struct smb_charger,
@@ -6650,8 +6665,6 @@ int smblib_init(struct smb_charger *chg)
 	INIT_DELAYED_WORK(&chg->thermal_regulation_work,
 					smblib_thermal_regulation_work);
 	INIT_DELAYED_WORK(&chg->usbov_dbc_work, smblib_usbov_dbc_work);
-	INIT_DELAYED_WORK(&chg->pr_swap_detach_work,
-					smblib_pr_swap_detach_work);
 
 	if (chg->wa_flags & CHG_TERMINATION_WA) {
 		INIT_WORK(&chg->chg_termination_work,
@@ -6791,7 +6804,6 @@ int smblib_deinit(struct smb_charger *chg)
 		cancel_delayed_work_sync(&chg->lpd_detach_work);
 		cancel_delayed_work_sync(&chg->thermal_regulation_work);
 		cancel_delayed_work_sync(&chg->usbov_dbc_work);
-		cancel_delayed_work_sync(&chg->pr_swap_detach_work);
 		power_supply_unreg_notifier(&chg->nb);
 		smblib_destroy_votables(chg);
 		qcom_step_chg_deinit();

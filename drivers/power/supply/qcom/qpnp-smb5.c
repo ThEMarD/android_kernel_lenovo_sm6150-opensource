@@ -29,6 +29,9 @@
 #include "smb5-reg.h"
 #include "smb5-lib.h"
 #include "schgm-flash.h"
+/* Huaqin add for JD2020-159 System don't be into sleep mode while plug in adapter or USB by yangxinlu at 2019/02/16 start */
+#include <linux/pm_wakeup.h>
+/* Huaqin add for JD2020-159 System don't be into sleep mode while plug in adapter or USB by yangxinlu at 2019/02/16 end */
 
 static struct smb_params smb5_pmi632_params = {
 	.fcc			= {
@@ -232,6 +235,14 @@ struct smb5 {
 	struct smb_dt_props	dt;
 };
 
+/* Huaqin modify for OHQC-2986 Change power-on battery protection temperature by gaochao at 2019/05/07 start */
+struct smb_charger *smbchg_dev = NULL;
+/* Huaqin modify for OHQC-2986 Change power-on battery protection temperature by gaochao at 2019/05/07 end */
+
+/* Huaqin add for JD2020-159 System don't be into sleep mode while plug in adapter or USB by yangxinlu at 2019/02/16 start */
+struct wakeup_source lenovo_chg_lock;
+static bool wakeupinit_flag = true;
+/* Huaqin add for JD2020-159 System don't be into sleep mode while plug in adapter or USB by yangxinlu at 2019/02/16 end */
 static int __debug_mask;
 module_param_named(
 	debug_mask, __debug_mask, int, 0600
@@ -827,7 +838,6 @@ static int smb5_usb_get_prop(struct power_supply *psy,
 	return 0;
 }
 
-#define MIN_THERMAL_VOTE_UA	500000
 static int smb5_usb_set_prop(struct power_supply *psy,
 		enum power_supply_property psp,
 		const union power_supply_propval *val)
@@ -879,20 +889,10 @@ static int smb5_usb_set_prop(struct power_supply *psy,
 		power_supply_changed(chg->usb_psy);
 		break;
 	case POWER_SUPPLY_PROP_THERM_ICL_LIMIT:
-		if (!is_client_vote_enabled(chg->usb_icl_votable,
-						THERMAL_THROTTLE_VOTER)) {
-			chg->init_thermal_ua = get_effective_result(
-							chg->usb_icl_votable);
-			icl = chg->init_thermal_ua + val->intval;
-		} else {
-			icl = get_client_vote(chg->usb_icl_votable,
-					THERMAL_THROTTLE_VOTER) + val->intval;
-		}
-
-		if (icl >= MIN_THERMAL_VOTE_UA)
+		icl = get_effective_result(chg->usb_icl_votable);
+		if ((icl + val->intval) > 0)
 			rc = vote(chg->usb_icl_votable, THERMAL_THROTTLE_VOTER,
-				(icl != chg->init_thermal_ua) ? true : false,
-				icl);
+					true, icl + val->intval);
 		else
 			rc = -EINVAL;
 		break;
@@ -2030,18 +2030,9 @@ static int smb5_configure_iterm_thresholds_adc(struct smb5 *chip)
 static int smb5_configure_iterm_thresholds(struct smb5 *chip)
 {
 	int rc = 0;
-	struct smb_charger *chg = &chip->chg;
 
 	switch (chip->dt.term_current_src) {
 	case ITERM_SRC_ADC:
-		rc = smblib_masked_write(chg, CHGR_ADC_TERM_CFG_REG,
-				TERM_BASED_ON_SYNC_CONV_OR_SAMPLE_CNT,
-				TERM_BASED_ON_SAMPLE_CNT);
-		if (rc < 0) {
-			dev_err(chg->dev, "Couldn't configure ADC_ITERM_CFG rc=%d\n",
-					rc);
-			return rc;
-		}
 		rc = smb5_configure_iterm_thresholds_adc(chip);
 		break;
 	default:
@@ -2299,15 +2290,6 @@ static int smb5_init_hw(struct smb5 *chip)
 	rc = smb5_init_dc_peripheral(chg);
 	if (rc < 0)
 		return rc;
-
-	/* Disable DC Input missing poller function */
-	rc = smblib_masked_write(chg, DCIN_LOAD_CFG_REG,
-					INPUT_MISS_POLL_EN_BIT, 0);
-	if (rc < 0) {
-		dev_err(chg->dev,
-			"Couldn't disable DC Input missing poller rc=%d\n", rc);
-		return rc;
-	}
 
 	/*
 	 * AICL configuration:
@@ -3122,6 +3104,7 @@ static int smb5_probe(struct platform_device *pdev)
 
 	chg = &chip->chg;
 	chg->dev = &pdev->dev;
+	__debug_mask = 0x1D;
 	chg->debug_mask = &__debug_mask;
 	chg->pd_disabled = &__pd_disabled;
 	chg->weak_chg_icl_ua = &__weak_chg_icl_ua;
@@ -3131,6 +3114,19 @@ static int smb5_probe(struct platform_device *pdev)
 	chg->connector_health = -EINVAL;
 	chg->otg_present = false;
 	chg->main_fcc_max = -EINVAL;
+        /* Huaqin add for JD2020-159 System don't be into sleep mode while plug in adapter or USB by yangxinlu at 2019/02/16 start */
+        if (wakeupinit_flag)
+        {
+            wakeup_source_init(&lenovo_chg_lock, "lenovo_chg_lock");
+            printk(KERN_ALERT "init usb wake lock\n");
+            wakeupinit_flag = false;
+        }
+        /* Huaqin add for JD2020-159 System don't be into sleep mode while plug in adapter or USB by yangxinlu at 2019/02/16 end */
+
+	/* Huaqin modify for OHQC-2986 Change power-on battery protection temperature by gaochao at 2019/05/07 start */
+	smbchg_dev = chg;
+	printk("[%s]line=%d: init smbchg_dev\n", __FUNCTION__, __LINE__);
+	/* Huaqin modify for OHQC-2986 Change power-on battery protection temperature by gaochao at 2019/05/07 end */
 
 	chg->regmap = dev_get_regmap(chg->dev->parent, NULL);
 	if (!chg->regmap) {

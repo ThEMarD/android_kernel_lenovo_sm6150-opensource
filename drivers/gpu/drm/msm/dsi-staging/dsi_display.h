@@ -608,6 +608,10 @@ void dsi_display_enable_event(struct drm_connector *connector,
 int dsi_display_set_backlight(struct drm_connector *connector,
 		void *display, u32 bl_lvl);
 
+#ifdef CONFIG_LCM_BACKLIGHT_HBM_MODE
+int dsi_display_hbm_setup(struct dsi_display *display, bool enable);
+#endif
+
 /**
  * dsi_display_check_status() - check if panel is dead or alive
  * @connector:          Pointer to drm connector structure

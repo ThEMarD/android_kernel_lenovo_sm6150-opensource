@@ -3610,7 +3610,7 @@ static void dwc3_gadget_interrupt(struct dwc3 *dwc,
 			if (dwc->gadget.state >= USB_STATE_CONFIGURED)
 				dwc3_gadget_suspend_interrupt(dwc,
 						event->event_info);
-			else
+			else if (dwc->gadget.speed)
 				usb_gadget_vbus_draw(&dwc->gadget, 2);
 		}
 		break;

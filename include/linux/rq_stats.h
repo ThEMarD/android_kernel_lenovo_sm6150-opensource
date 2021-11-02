@@ -11,10 +11,18 @@
  *
  */
 
+#define SUPPORT_HEAVY_APP_POWER_OP
+#ifdef SUPPORT_HEAVY_APP_POWER_OP
+#define MPCTL_MAX_CMD 128
+#endif
+
 struct rq_data {
 	unsigned long def_timer_jiffies;
 	unsigned long def_timer_last_jiffy;
 	int64_t def_start_time;
+#ifdef SUPPORT_HEAVY_APP_POWER_OP
+	unsigned char mpctl[MPCTL_MAX_CMD];
+#endif
 	struct attribute_group *attr_group;
 	struct kobject *kobj;
 	struct work_struct def_timer_work;
